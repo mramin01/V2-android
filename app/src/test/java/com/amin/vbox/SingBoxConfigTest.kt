@@ -33,7 +33,7 @@ class SingBoxConfigTest {
         val outbound = root["outbounds"]!!.jsonArray[0].jsonObject
         assertEquals("vless", outbound["type"]!!.jsonPrimitive.content)
         assertEquals("203.0.113.20", outbound["server"]!!.jsonPrimitive.content)
-        assertEquals(443, outbound["server_port"]!!.jsonPrimitive.int)
+        assertEquals(443, outbound["server_port"]!!.jsonPrimitive.content.toInt())
         assertEquals("proxy", root["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
         assertEquals("ws", outbound["transport"]!!.jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("example.com", outbound["tls"]!!.jsonObject["server_name"]!!.jsonPrimitive.content)
