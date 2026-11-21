@@ -13,7 +13,7 @@ import java.math.BigInteger
  */
 object X25519 {
     private val P = BigInteger("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed", 16)
-    private val A24 = BigInteger("121666")
+    private val A24 = BigInteger("121665") // (486662 - 2) / 4
 
     /** X25519(secret 32 bytes, u-coordinate 32 bytes) -> 32-byte shared secret / public key. */
     fun scalarmult(secret: ByteArray, u: ByteArray): ByteArray {

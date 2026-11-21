@@ -1,6 +1,6 @@
 package com.amin.vbox.data
 
-import android.util.Base64
+import java.util.Base64
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -244,14 +244,14 @@ object ConfigParser {
                 .replace('-', '+').replace('_', '/')
             val pad = (4 - s.length % 4) % 4
             s += "=".repeat(pad)
-            Base64.decode(s, Base64.DEFAULT)
+            Base64.getDecoder().decode(s)
         } catch (_: Exception) {
             null
         }
     }
 
     fun encodeBase64UrlNoPadding(bytes: ByteArray): String =
-        Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('=')
+        Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
     fun urlDecode(s: String): String = try {
         URLDecoder.decode(s.replace("+", "%2B"), "UTF-8")
