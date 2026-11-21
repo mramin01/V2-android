@@ -93,7 +93,9 @@ class MainActivity : ComponentActivity() {
 
     private val vm: VpnViewModel by viewModels()
 
-    private val vpnPermissionLauncher = registerForActivityResult(
+    // Internal (not private): VboxRoot is an extension function on this
+    // activity, and extensions cannot see private members.
+    internal val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) vm.onVpnPermissionGranted()
