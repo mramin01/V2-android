@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -48,7 +49,7 @@ fun SubScreen(title: String, onBack: () -> Unit, content: @Composable () -> Unit
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, null, tint = Color.White, modifier = androidx.compose.ui.Modifier.size(28.dp))
+                Icon(Icons.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
             Text(title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         }
@@ -134,8 +135,8 @@ fun TunnelScreen(state: UiState, vm: VpnViewModel, onBack: () -> Unit) {
             )
         }
         androidx.compose.material3.Divider(color = VboxColors.Divider)
-        SwitchRow(s.ipv6, state.settings.ipv6, { vm.updateSettings { it.copy(ipv6 = it) } })
-        SwitchRow(s.allowLanBypass, state.settings.allowLanBypass, { vm.updateSettings { it.copy(allowLanBypass = it) } }, showDivider = false)
+        SwitchRow(s.ipv6, state.settings.ipv6, { checked -> vm.updateSettings { it.copy(ipv6 = checked) } })
+        SwitchRow(s.allowLanBypass, state.settings.allowLanBypass, { checked -> vm.updateSettings { it.copy(allowLanBypass = checked) } }, showDivider = false)
     }
 }
 
