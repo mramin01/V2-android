@@ -174,6 +174,7 @@ object SingBoxConfig {
                     if (config.path.isNotBlank()) put("service_name", config.path)
                 })
                 "h2" -> put("transport", buildJsonObject { put("type", "http") })
+                else -> { /* no transport (plain TCP) */ }
             }
         }
     }
