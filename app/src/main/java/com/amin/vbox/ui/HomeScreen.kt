@@ -66,6 +66,12 @@ fun HomeScreen(
     val connected = state.connection == ConnectionState.CONNECTED
     val up = if (connected) state.traffic.uploadBytes else state.settings.lastUploadBytes
     val down = if (connected) state.traffic.downloadBytes else state.settings.lastDownloadBytes
+    // The row must show the mode that is actually set, not a fixed "(DoU)".
+    val dnsLabel = when (state.settings.dnsMode) {
+        "doh" -> "DNS (DoH)"
+        "dou" -> "DNS (DoU)"
+        else -> "DNS (UDP)"
+    }
     val statusText = when (state.connection) {
         ConnectionState.CONNECTED -> {
             val ip = Format.maskIp(state.publicIp)
@@ -111,7 +117,7 @@ fun HomeScreen(
                     onInfo = {
                         onShowInfo(
                             s.stopOnSleep,
-                            "When ON, the VPN disconnects automatically when the screen turns off."
+                            s.stopOnSleepInfo
                         )
                     }
                 )
@@ -123,7 +129,7 @@ fun HomeScreen(
                     onInfo = {
                         onShowInfo(
                             s.smartConnect,
-                            "When ON, connecting picks the lowest-ping server automatically."
+                            s.smartConnectInfo
                         )
                     }
                 )
@@ -143,7 +149,7 @@ fun HomeScreen(
                 )
                 CardRow(
                     icon = Icons.Filled.Language,
-                    label = s.dns,
+                    label = dnsLabel,
                     labelColor = VboxColors.Accent,
                     onClick = onOpenDns,
                     trailing = {
@@ -161,7 +167,7 @@ fun HomeScreen(
                     onClick = {
                         onShowInfo(
                             s.telegramCommunity,
-                            "VBOX ships without a bundled community link. No Telegram group is linked in this build."
+                            s.telegramCommunityInfo
                         )
                     },
                     showDivider = false,
@@ -183,7 +189,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
-        VerticalSpacer(180)
+        VerticalSpacer(BottomClearanceDp)
     }
 }
 

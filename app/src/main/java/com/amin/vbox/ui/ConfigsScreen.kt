@@ -115,9 +115,9 @@ fun ConfigsScreen(
                     contentAlignment = Alignment.Center
                 ) { Icon(Icons.Filled.List, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
                 DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
-                    DropdownMenuItem(text = { Text("Ping") }, onClick = { vm.setSortMode("ping"); sortMenuOpen = false })
-                    DropdownMenuItem(text = { Text("Name") }, onClick = { vm.setSortMode("name"); sortMenuOpen = false })
-                    DropdownMenuItem(text = { Text("None") }, onClick = { vm.setSortMode("none"); sortMenuOpen = false })
+                    DropdownMenuItem(text = { Text(s.sortPing) }, onClick = { vm.setSortMode("ping"); sortMenuOpen = false })
+                    DropdownMenuItem(text = { Text(s.sortName) }, onClick = { vm.setSortMode("name"); sortMenuOpen = false })
+                    DropdownMenuItem(text = { Text(s.sortNone) }, onClick = { vm.setSortMode("none"); sortMenuOpen = false })
                 }
             }
         }
@@ -134,7 +134,7 @@ fun ConfigsScreen(
             Text(s.sortBy, color = VboxColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(12.dp))
             Text(
-                when (state.settings.sortMode) { "name" -> "Name"; "none" -> "None"; else -> "Ping" },
+                when (state.settings.sortMode) { "name" -> s.sortName; "none" -> s.sortNone; else -> s.sortPing },
                 color = Color.White, fontSize = 17.sp
             )
             Spacer(Modifier.weight(1f))
@@ -145,7 +145,24 @@ fun ConfigsScreen(
                 modifier = Modifier.clickable { vm.pingAll() }
             )
             Spacer(Modifier.width(12.dp))
-            Icon(Icons.Filled.Settings, null, tint = VboxColors.GreyText, modifier = Modifier.size(24.dp))
+            // The gear used to be a dead icon; it opens the same sort menu
+            // as the list button in the top pill.
+            Icon(
+                Icons.Filled.Settings, null, tint = VboxColors.GreyText,
+                modifier = Modifier
+                    .size(24.dp)
+                    .clickable { sortMenuOpen = true }
+            )
+        }
+        if (state.busy) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = VboxColors.AccentDeep,
+                trackColor = VboxColors.ProgressTrack
+            )
         }
         VerticalSpacer(16)
 
@@ -159,7 +176,8 @@ fun ConfigsScreen(
             usageRight = null,
             isSubscription = false,
             onClick = { onOpenGroup("local") },
-            onPing = { vm.pingAll(null) },
+            onPing = { vm.pingGroup("local") },
+            onRefresh = null,
             onMenu = null
         )
         VerticalSpacer(12)
@@ -171,13 +189,16 @@ fun ConfigsScreen(
             val info = sub.info
             GroupCard(
                 title = "${sub.name} ($count)",
-                subtitle = null,
+                // An empty subscription must say so under the usage bar
+                // instead of looking identical to a healthy one.
+                subtitle = if (count == 0) s.noServers else null,
                 usageFraction = info?.usageFraction,
                 usageLeft = info?.let { "${Format.bytes(it.used)} / ${Format.bytes(it.total)}" },
                 usageRight = info?.daysLeft?.let { "$it ${s.daysLeft}" } ?: info?.let { s.expiresNever },
                 isSubscription = true,
                 onClick = { onOpenGroup(sub.id) },
-                onPing = { vm.pingAll(sub.id) },
+                onPing = { vm.pingGroup(sub.id) },
+                onRefresh = { vm.refreshSubscription(sub) },
                 onMenu = { menuSub = sub }
             )
             if (menuSub?.id == sub.id) {
@@ -225,7 +246,7 @@ fun ConfigsScreen(
                 }
             }
         }
-        VerticalSpacer(180)
+        VerticalSpacer(BottomClearanceDp)
     }
 }
 
@@ -239,6 +260,7 @@ private fun GroupCard(
     isSubscription: Boolean,
     onClick: () -> Unit,
     onPing: () -> Unit,
+    onRefresh: (() -> Unit)?,
     onMenu: (() -> Unit)?
 ) {
     Box(
@@ -251,7 +273,14 @@ private fun GroupCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isSubscription) {
-                Icon(Icons.Filled.Refresh, null, tint = VboxColors.Accent, modifier = Modifier.size(30.dp))
+                // Refresh is its own action: it must not fall through to
+                // the card's onClick (which opens the group).
+                Icon(
+                    Icons.Filled.Refresh, null, tint = VboxColors.Accent,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clickable { onRefresh?.invoke() }
+                )
                 Spacer(Modifier.width(12.dp))
             } else {
                 Icon(Icons.Filled.ChevronRight, null, tint = VboxColors.GreyText, modifier = Modifier.size(30.dp))
@@ -275,7 +304,8 @@ private fun GroupCard(
                         Text(usageLeft ?: "", color = VboxColors.GreyText, fontSize = 15.sp)
                         Text(usageRight ?: "", color = VboxColors.GreyText, fontSize = 15.sp)
                     }
-                } else if (subtitle != null) {
+                }
+                if (subtitle != null) {
                     Spacer(Modifier.height(8.dp))
                     Text(subtitle, color = VboxColors.GreyText, fontSize = 15.sp)
                 }

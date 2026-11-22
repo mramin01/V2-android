@@ -54,7 +54,7 @@ fun SubScreen(title: String, onBack: () -> Unit, content: @Composable () -> Unit
             Text(title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         }
         VboxCard(Modifier.fillMaxWidth()) { Column { content() } }
-        VerticalSpacer(180)
+        VerticalSpacer(BottomClearanceDp)
     }
 }
 
@@ -150,7 +150,7 @@ fun DnsScreen(state: UiState, vm: VpnViewModel, onBack: () -> Unit) {
         RadioRow(s.dnsDoh, state.settings.dnsMode == "doh", { vm.updateSettings { it.copy(dnsMode = "doh") } })
         RadioRow(s.dnsDou, state.settings.dnsMode == "dou", { vm.updateSettings { it.copy(dnsMode = "dou") } })
         Column(Modifier.padding(vertical = 8.dp)) {
-            Text("DNS server", color = Color.White, fontSize = 18.sp)
+            Text(s.dnsServer, color = Color.White, fontSize = 18.sp)
             OutlinedTextField(
                 value = serverText,
                 onValueChange = {
@@ -175,7 +175,7 @@ fun RoutingScreen(state: UiState, vm: VpnViewModel, onBack: () -> Unit) {
         RadioRow(s.globalRouting, state.settings.routingMode == "global", { vm.updateSettings { it.copy(routingMode = "global") } })
         RadioRow(s.bypassLanRouting, state.settings.routingMode == "bypass-lan", { vm.updateSettings { it.copy(routingMode = "bypass-lan") } }, showDivider = false)
         Text(
-            "Routing is written into the sing-box config when the tunnel starts.",
+            s.routingNote,
             color = VboxColors.GreyText, fontSize = 15.sp,
             modifier = Modifier.padding(vertical = 12.dp)
         )
@@ -185,8 +185,8 @@ fun RoutingScreen(state: UiState, vm: VpnViewModel, onBack: () -> Unit) {
 @Composable
 fun CoreStatusScreen(state: UiState, onBack: () -> Unit) {
     val s = state.strings
-    val available = CoreEngineFactory.create().isAvailable
-    SubScreen("VPN Core", onBack) {
+    val available = remember { CoreEngineFactory.create().isAvailable }
+    SubScreen(s.vpnCore, onBack) {
         Column(Modifier.padding(vertical = 16.dp)) {
             Text(
                 if (available) "Ready — sing-box core is bundled." else s.coreNotReadyTitle,

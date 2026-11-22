@@ -62,6 +62,8 @@ fun SettingsScreen(
 
     val hwid = identity.hwid
     val pubKey = identity.publicKeyFull
+    // One engine lookup per composition, not one per row recomposition.
+    val coreAvailable = remember { CoreEngineFactory.create().isAvailable }
 
     Column(
         modifier = Modifier
@@ -190,13 +192,13 @@ fun SettingsScreen(
                 )
                 CardRow(
                     icon = Icons.Filled.Memory,
-                    label = "VPN Core",
+                    label = s.vpnCore,
                     onClick = onOpenCore,
                     showDivider = false,
                     trailing = {
                         Text(
-                            if (CoreEngineFactory.create().isAvailable) "Ready" else "Not installed",
-                            color = if (CoreEngineFactory.create().isAvailable) Color(0xFF22C55E) else VboxColors.Red,
+                            if (coreAvailable) "Ready" else "Not installed",
+                            color = if (coreAvailable) Color(0xFF22C55E) else VboxColors.Red,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -204,7 +206,7 @@ fun SettingsScreen(
                 )
             }
         }
-        VerticalSpacer(180)
+        VerticalSpacer(BottomClearanceDp)
     }
 
     if (confirmReset) {

@@ -27,8 +27,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/** Height of the floating bottom overlay (power row + nav bar + margins).
+ * Every scrollable screen ends with this much empty space so its last row
+ * can be scrolled fully above the overlay instead of hiding behind it. */
+const val BottomClearanceDp = 200
 
 /** Big rounded card like the screenshots: #1C1C1E, ~28dp corners. */
 @Composable
@@ -159,7 +165,9 @@ fun GreyValuePill(text: String, modifier: Modifier = Modifier) {
             .background(Color(0xFF8E8E93).copy(alpha = 0.55f))
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        Text(text, color = VboxColors.White, fontSize = 15.sp)
+        // Long values (a 36-char HWID) must ellipsize, not wrap or overflow
+        // the row; the copy button next to it copies the full value.
+        Text(text, color = VboxColors.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

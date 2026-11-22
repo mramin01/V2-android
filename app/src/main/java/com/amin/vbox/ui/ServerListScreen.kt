@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -51,6 +52,8 @@ fun ServerListScreen(
     val title = if (groupId == "local") s.local
     else state.subscriptions.firstOrNull { it.id == groupId }?.name ?: s.configs
     val list = if (groupId == "local") state.localConfigs else state.configsOf(groupId)
+    // The subscription itself, for the empty-state actions below.
+    val sub = state.subscriptions.firstOrNull { it.id == groupId }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
@@ -61,19 +64,40 @@ fun ServerListScreen(
             Spacer(Modifier.weight(1f))
             Text(
                 s.pingAll, color = VboxColors.Accent, fontSize = 16.sp,
-                modifier = Modifier.clickable { vm.pingAll(if (groupId == "local") null else groupId) }
+                modifier = Modifier.clickable { vm.pingGroup(groupId) }
             )
         }
         if (list.isEmpty()) {
-            Text(s.noInformation, color = VboxColors.GreyText, modifier = Modifier.padding(16.dp))
+            // An empty group must explain itself and offer the next step —
+            // not just "No information" on a blank screen.
+            Column(Modifier.padding(16.dp)) {
+                Text(s.noServers, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (sub != null) s.subscriptionNoConfigs else s.noInformation,
+                    color = VboxColors.GreyText, fontSize = 16.sp
+                )
+                if (sub?.info?.daysLeft == 0L) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(s.expiredNotice, color = VboxColors.Red, fontSize = 16.sp)
+                }
+                if (sub != null) {
+                    Spacer(Modifier.height(16.dp))
+                    DarkPill(
+                        label = s.update,
+                        icon = Icons.Filled.Refresh,
+                        onClick = { vm.refreshSubscription(sub) }
+                    )
+                }
+            }
         }
         LazyColumn(Modifier.fillMaxSize()) {
             items(list, key = { it.id }) { cfg ->
-                ServerRow(cfg, selected = cfg.id == state.settings.selectedConfigId, onSelect = {
+                ServerRow(cfg, selected = cfg.id == state.settings.selectedConfigId, timeoutLabel = s.timeout, onSelect = {
                     vm.selectConfig(cfg.id)
                 }, onDelete = { vm.deleteConfig(cfg) })
             }
-            item { VerticalSpacer(180) }
+            item { VerticalSpacer(BottomClearanceDp) }
         }
     }
 }
@@ -82,6 +106,7 @@ fun ServerListScreen(
 private fun ServerRow(
     cfg: ProxyConfig,
     selected: Boolean,
+    timeoutLabel: String,
     onSelect: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -111,7 +136,7 @@ private fun ServerRow(
             )
         }
         Text(
-            PingTester.label(cfg.pingMs),
+            PingTester.label(cfg.pingMs, timeoutLabel),
             color = pingColor(cfg.pingMs),
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold

@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.amin.vbox.VpnViewModel
+import com.amin.vbox.data.ConfigParser
 import com.amin.vbox.data.Subscription
 import com.amin.vbox.i18n.AppStrings
 
@@ -66,25 +67,39 @@ private fun MenuItem(label: String, onClick: () -> Unit) {
 @Composable
 fun ManualLinkDialog(s: AppStrings, vm: VpnViewModel, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(s.addManually, color = Color.White) },
         text = {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it },
-                placeholder = { Text("vmess://… / vless://… / trojan://… / ss://…", color = VboxColors.GreyText) },
-                singleLine = false, minLines = 3,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = VboxColors.Accent, unfocusedBorderColor = VboxColors.Divider
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it; error = false },
+                    placeholder = { Text("vmess://… / vless://… / trojan://… / ss://…", color = VboxColors.GreyText) },
+                    singleLine = false, minLines = 3,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = VboxColors.Accent, unfocusedBorderColor = VboxColors.Divider
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error) {
+                    Text(
+                        s.noLinksFound, color = VboxColors.Red, fontSize = 15.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
         },
         confirmButton = {
             Text(
                 s.save, color = VboxColors.Accent,
-                modifier = Modifier.clickable { vm.addLink(text); onDismiss() }.padding(8.dp)
+                modifier = Modifier.clickable {
+                    // Only dismiss when there is actually a link to add;
+                    // otherwise the text (and the failure) vanished with it.
+                    if (ConfigParser.extractLinks(text).isEmpty()) error = true
+                    else { vm.addLinks(text); onDismiss() }
+                }.padding(8.dp)
             )
         },
         dismissButton = {
@@ -99,6 +114,7 @@ fun SubscriptionDialog(s: AppStrings, vm: VpnViewModel, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var autoUpdate by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(s.addSubscription, color = Color.White) },
@@ -115,7 +131,7 @@ fun SubscriptionDialog(s: AppStrings, vm: VpnViewModel, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = url, onValueChange = { url = it },
+                    value = url, onValueChange = { url = it; error = null },
                     label = { Text(s.subscriptionUrl, color = VboxColors.GreyText) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -124,6 +140,12 @@ fun SubscriptionDialog(s: AppStrings, vm: VpnViewModel, onDismiss: () -> Unit) {
                     ),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                 )
+                if (error != null) {
+                    Text(
+                        error!!, color = VboxColors.Red, fontSize = 15.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(top = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -148,8 +170,18 @@ fun SubscriptionDialog(s: AppStrings, vm: VpnViewModel, onDismiss: () -> Unit) {
             Text(
                 s.save, color = VboxColors.Accent,
                 modifier = Modifier.clickable {
-                    if (url.isNotBlank()) vm.addSubscription(name.trim(), url.trim(), autoUpdate)
-                    onDismiss()
+                    val u = url.trim()
+                    // A blank URL, or a proxy link pasted in the URL field,
+                    // used to close the dialog with no feedback at all.
+                    error = when {
+                        u.isBlank() -> s.enterSubscriptionUrl
+                        u.contains("://") && !u.startsWith("http://") && !u.startsWith("https://") -> s.invalidLink
+                        else -> null
+                    }
+                    if (error == null) {
+                        vm.addSubscription(name.trim(), u, autoUpdate)
+                        onDismiss()
+                    }
                 }.padding(8.dp)
             )
         },
