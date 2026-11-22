@@ -85,7 +85,23 @@ data class AppStrings(
     val dnsDou: String,
     val timeout: String,
     val tapToConnect: String,
-    val lastSession: String
+    val lastSession: String,
+    val subscriptionNoConfigs: String,
+    val subscriptionUnparseable: String,
+    val expiredNotice: String,
+    val enterSubscriptionUrl: String,
+    val noServers: String,
+    val stopOnSleepInfo: String,
+    val smartConnectInfo: String,
+    val telegramCommunityInfo: String,
+    val routingNote: String,
+    val dnsServer: String,
+    val vpnCore: String,
+    val sortPing: String,
+    val sortName: String,
+    val sortNone: String,
+    val cameraPermissionNeeded: String,
+    val alreadyAdded: String
 )
 
 object Strings {
@@ -128,7 +144,20 @@ object Strings {
         pureBlack = "Pure black", darkGrey = "Dark grey",
         dnsMode = "DNS mode", dnsUdp = "UDP", dnsDoh = "DNS over HTTPS", dnsDou = "DNS over UDP (DoU)",
         timeout = "timeout", tapToConnect = "Tap the power button to connect",
-        lastSession = "Last session"
+        lastSession = "Last session",
+        subscriptionNoConfigs = "This subscription returned no configs. Check the link and your plan.",
+        subscriptionUnparseable = "lines received, but none could be parsed as proxy links.",
+        expiredNotice = "It looks expired (0 days left) — the server may have stopped sending configs.",
+        enterSubscriptionUrl = "Enter the subscription URL first.",
+        noServers = "No servers",
+        stopOnSleepInfo = "When ON, the VPN disconnects automatically when the screen turns off.",
+        smartConnectInfo = "When ON, connecting picks the lowest-ping server automatically.",
+        telegramCommunityInfo = "VBOX ships without a bundled community link. No Telegram group is linked in this build.",
+        routingNote = "Routing is written into the sing-box config when the tunnel starts.",
+        dnsServer = "DNS server", vpnCore = "VPN Core",
+        sortPing = "Ping", sortName = "Name", sortNone = "None",
+        cameraPermissionNeeded = "Camera permission is needed to scan QR codes.",
+        alreadyAdded = "Already in your list."
     )
 
     val fa = AppStrings(
@@ -170,7 +199,20 @@ object Strings {
         pureBlack = "مشکی خالص", darkGrey = "خاکستری تیره",
         dnsMode = "حالت DNS", dnsUdp = "UDP", dnsDoh = "DNS روی HTTPS", dnsDou = "DNS روی UDP ‏(DoU)",
         timeout = "تایم‌اوت", tapToConnect = "برای اتصال دکمه پاور را بزنید",
-        lastSession = "نشست قبلی"
+        lastSession = "نشست قبلی",
+        subscriptionNoConfigs = "این اشتراک هیچ کانفیگی برنگرداند. لینک و وضعیت اشتراک را بررسی کنید.",
+        subscriptionUnparseable = "خط دریافت شد، ولی هیچ‌کدام به‌عنوان لینک پروکسی خوانده نشد.",
+        expiredNotice = "به‌نظر می‌رسد منقضی شده (۰ روز مانده) — ممکن است سرور دیگر کانفیگ نفرستد.",
+        enterSubscriptionUrl = "اول آدرس اشتراک را وارد کنید.",
+        noServers = "سروری نیست",
+        stopOnSleepInfo = "وقتی روشن است، با خاموش شدن صفحه، VPN به‌طور خودکار قطع می‌شود.",
+        smartConnectInfo = "وقتی روشن است، هنگام اتصال، سرور با کمترین پینگ به‌طور خودکار انتخاب می‌شود.",
+        telegramCommunityInfo = "در این نسخه هیچ لینک گروه تلگرامی همراه برنامه نیست.",
+        routingNote = "مسیریابی هنگام شروع تونل در کانفیگ sing-box نوشته می‌شود.",
+        dnsServer = "سرور DNS", vpnCore = "هسته VPN",
+        sortPing = "پینگ", sortName = "نام", sortNone = "بدون ترتیب",
+        cameraPermissionNeeded = "برای اسکن QR به دسترسی دوربین نیاز است.",
+        alreadyAdded = "از قبل در لیست شما بود."
     )
 
     fun forLanguage(lang: String): AppStrings = if (lang == "fa") fa else en
