@@ -47,6 +47,17 @@ object ConfigParser {
     fun parseMany(text: String, subscriptionId: String? = null): List<ProxyConfig> =
         extractLinks(text).mapNotNull { parse(it, subscriptionId) }
 
+    /**
+     * Stable id for a link inside its group. The same link always gets the
+     * same id, so a subscription refresh (which re-parses every link) keeps
+     * the same servers: the selected server stays selected and saved pings
+     * survive the refresh instead of silently pointing at deleted rows.
+     */
+    private fun stableId(link: String, subscriptionId: String?): String =
+        UUID.nameUUIDFromBytes(
+            "${subscriptionId ?: "local"}|$link".toByteArray(Charsets.UTF_8)
+        ).toString()
+
     // ---- vmess ----
 
     private fun parseVmess(link: String, subscriptionId: String?): ProxyConfig? {
@@ -58,7 +69,7 @@ object ConfigParser {
             .ifBlank { s("ps") }.ifBlank { "VMess" }
         val port = s("port").toIntOrNull() ?: return null
         return ProxyConfig(
-            id = UUID.randomUUID().toString(),
+            id = stableId(link, subscriptionId),
             name = name,
             protocol = "vmess",
             address = s("add"),
@@ -91,7 +102,7 @@ object ConfigParser {
         val name = link.substringAfter("#", "").let { if (it.isBlank()) host else urlDecode(it) }
         val security = query["security"] ?: ""
         return ProxyConfig(
-            id = UUID.randomUUID().toString(),
+            id = stableId(link, subscriptionId),
             name = name,
             protocol = "vless",
             address = host,
@@ -120,7 +131,7 @@ object ConfigParser {
         val query = parseQuery(afterAt.substringAfter("?", "").substringBefore("#"))
         val name = link.substringAfter("#", "").let { if (it.isBlank()) host else urlDecode(it) }
         return ProxyConfig(
-            id = UUID.randomUUID().toString(),
+            id = stableId(link, subscriptionId),
             name = name,
             protocol = "trojan",
             address = host,
@@ -147,7 +158,7 @@ object ConfigParser {
         val beforeFrag = rest.substringBefore("#")
         val (method, password, host, port) = parseSsBody(beforeFrag) ?: return null
         return ProxyConfig(
-            id = UUID.randomUUID().toString(),
+            id = stableId(link, subscriptionId),
             name = name.ifBlank { "$host:$port" },
             protocol = "shadowsocks",
             address = host,

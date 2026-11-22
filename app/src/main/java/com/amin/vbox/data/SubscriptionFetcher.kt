@@ -40,9 +40,11 @@ object SubscriptionFetcher {
                     )
                     val body = response.body?.string() ?: ""
                     val lines = ConfigParser.decodeSubscriptionBody(body)
+                    // Same link twice in one body must not produce two rows
+                    // with the same id (LazyColumn keys must be unique).
                     val configs = lines.mapNotNull { line ->
                         ConfigParser.parse(line.trim(), subscriptionId)
-                    }
+                    }.distinctBy { it.id }
                     FetchResult(configs, userInfo, lines.size)
                 }
             }

@@ -40,19 +40,20 @@ class Store(private val context: Context) {
         context.dataStore.edit { it[KEY_CONFIGS] = json.encodeToString(list) }
     }
 
-    suspend fun addConfigs(newOnes: List<ProxyConfig>): Int {
+    /** Adds the not-yet-known configs and returns the ones actually added. */
+    suspend fun addConfigs(newOnes: List<ProxyConfig>): List<ProxyConfig> {
         val current = loadConfigs().toMutableList()
-        var added = 0
+        val added = mutableListOf<ProxyConfig>()
         for (c in newOnes) {
             // De-dupe on raw link (same link re-imported) or same host+uuid.
             val dup = current.any { it.rawLink == c.rawLink && c.rawLink.isNotBlank() } ||
                 current.any { it.address == c.address && it.port == c.port && it.uuid == c.uuid && it.uuid.isNotBlank() }
             if (!dup) {
                 current.add(c)
-                added++
+                added += c
             }
         }
-        if (added > 0) saveConfigs(current)
+        if (added.isNotEmpty()) saveConfigs(current)
         return added
     }
 

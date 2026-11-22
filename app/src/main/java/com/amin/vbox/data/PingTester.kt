@@ -41,10 +41,10 @@ object PingTester {
             }.awaitAll().toMap()
         }
 
-    /** Human label: "86 ms", "timeout", "—". */
-    fun label(ms: Long?): String = when {
+    /** Localized "timeout" label for a failed probe (null = never tested). */
+    fun label(ms: Long?, timeoutLabel: String = "timeout"): String = when {
         ms == null -> "—"
-        ms < 0 -> "timeout"
+        ms < 0 -> timeoutLabel
         else -> "$ms ms"
     }
 
