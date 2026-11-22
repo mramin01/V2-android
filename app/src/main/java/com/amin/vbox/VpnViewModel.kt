@@ -397,7 +397,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
             previousSelected?.takeIf { it.subscriptionId == sub.id },
             fetched.configs
         ) ?: if (selectFirst) fetched.configs.firstOrNull() else null
-        target?.let { store.updateSettings { it.copy(selectedConfigId = it.id) } }
+        target?.let { cfg -> store.updateSettings { it.copy(selectedConfigId = cfg.id) } }
         if (!silent) _events.emit(UiEvent.Message("${fetched.configs.size} ${s.addedConfigs}"))
     }
 
