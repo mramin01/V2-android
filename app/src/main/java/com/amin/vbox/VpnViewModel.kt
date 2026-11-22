@@ -81,8 +81,27 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     subscriptions = subs,
                     settings = settings
                 )
+                // "Auto update" that actually updates: once per launch, refresh
+                // the auto-update subscriptions whose data is older than a day
+                // (or never fetched). Silent — no snackbars on startup; the
+                // empty-fetch guard in applyFetchResult protects the servers.
+                if (!autoRefreshDone && subs.isNotEmpty()) {
+                    autoRefreshDone = true
+                    val stale = subs.filter { sub ->
+                        sub.autoUpdate && (sub.lastUpdatedAt == 0L ||
+                            System.currentTimeMillis() - sub.lastUpdatedAt > DAY_MS)
+                    }
+                    for (sub in stale) refreshSubscription(sub, silent = true)
+                }
             }
         }
+    }
+
+    private var autoRefreshDone = false
+
+    /** Show a snackbar message (also usable from the Activity, e.g. permission denials). */
+    fun showMessage(text: String) {
+        viewModelScope.launch { _events.emit(UiEvent.Message(text)) }
     }
 
     private fun sortConfigs(list: List<ProxyConfig>, mode: String): List<ProxyConfig> = when (mode) {
@@ -205,14 +224,24 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun pingSelected() {
-        val cfg = _state.value.selectedConfig ?: return
+        val cfg = _state.value.selectedConfig
+        if (cfg == null) {
+            showMessage(_state.value.strings.selectServer)
+            return
+        }
         pingConfigs(listOf(cfg))
     }
 
-    fun pingAll(subscriptionId: String? = null) {
-        val list = if (subscriptionId == null) _state.value.configs
-        else _state.value.configsOf(subscriptionId)
+    /** Ping every server in one group ("local" = the Local group). */
+    fun pingGroup(groupId: String) {
+        val list = if (groupId == "local") _state.value.localConfigs
+        else _state.value.configsOf(groupId)
         pingConfigs(list)
+    }
+
+    /** Ping every server the app knows. */
+    fun pingAll() {
+        pingConfigs(_state.value.configs)
     }
 
     fun pingConfigs(list: List<ProxyConfig>) {
@@ -238,64 +267,138 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addFromClipboard(context: Context) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val text = cm?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+        val clip = cm?.primaryClip
+        if (clip == null || clip.itemCount == 0) {
+            showMessage(_state.value.strings.noLinksFound)
+            return
+        }
+        val text = clip.getItemAt(0)?.text?.toString().orEmpty()
+        addLinks(text)
+    }
+
+    /** Single-link entry point (QR scan, share intent, deep link). */
+    fun addLink(raw: String) = addLinks(raw)
+
+    /**
+     * Add every proxy link found in [text] (one link, or pasted text with
+     * several) and SELECT the first newly added one — adding a config must
+     * make it the active server. Re-adding a link that is already stored
+     * selects the existing server instead of reporting "0 added".
+     */
+    fun addLinks(text: String) {
         viewModelScope.launch {
-            val parsed = ConfigParser.parseMany(text)
+            val trimmed = text.trim()
+            // A single clean link keeps its full fragment (#name with spaces);
+            // anything else is scanned for all links it contains.
+            val parsed = ConfigParser.parse(trimmed)?.let { listOf(it) }
+                ?: ConfigParser.parseMany(trimmed)
             if (parsed.isEmpty()) {
                 _events.emit(UiEvent.Message(_state.value.strings.noLinksFound))
                 return@launch
             }
             val added = store.addConfigs(parsed)
-            _events.emit(UiEvent.Message("$added ${_state.value.strings.addedConfigs}"))
+            selectNewOrExisting(added, parsed)
+            val msg = if (added.isEmpty()) _state.value.strings.alreadyAdded
+            else "${added.size} ${_state.value.strings.addedConfigs}"
+            _events.emit(UiEvent.Message(msg))
         }
     }
 
-    fun addLink(raw: String) {
-        viewModelScope.launch {
-            val parsed = ConfigParser.parse(raw.trim())
-            if (parsed == null) {
-                _events.emit(UiEvent.Message(_state.value.strings.invalidLink))
-                return@launch
+    /** Select the first added config, or the stored twin of a re-added one. */
+    private suspend fun selectNewOrExisting(added: List<ProxyConfig>, candidates: List<ProxyConfig>) {
+        val target = added.firstOrNull()
+            ?: candidates.firstNotNullOfOrNull { matchConfig(it, _state.value.configs) }
+            ?: return
+        store.updateSettings { it.copy(selectedConfigId = target.id) }
+    }
+
+    /** Find [old] (or an equal server) inside [inList]: same id, link, or host. */
+    private fun matchConfig(old: ProxyConfig?, inList: List<ProxyConfig>): ProxyConfig? {
+        if (old == null) return null
+        return inList.firstOrNull { it.id == old.id }
+            ?: inList.firstOrNull { it.rawLink.isNotBlank() && it.rawLink == old.rawLink }
+            ?: inList.firstOrNull {
+                it.address == old.address && it.port == old.port &&
+                    it.uuid.isNotBlank() && it.uuid == old.uuid
             }
-            store.addConfigs(listOf(parsed))
-            _events.emit(UiEvent.Message("1 ${_state.value.strings.addedConfigs}"))
-        }
     }
 
     fun addSubscription(name: String, url: String, autoUpdate: Boolean) {
+        val fixedUrl = url.trim().let {
+            if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
+        }
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
             val sub = Subscription(
                 id = UUID.randomUUID().toString(),
-                name = name.ifBlank { url },
-                url = url.trim(),
+                name = name.ifBlank { fixedUrl },
+                url = fixedUrl,
                 autoUpdate = autoUpdate
             )
             val result = SubscriptionFetcher.fetch(sub.url, sub.id)
             _state.value = _state.value.copy(busy = false)
             result.onSuccess { fetched ->
-                store.upsertSubscription(sub.copy(info = fetched.info, lastUpdatedAt = System.currentTimeMillis()))
-                store.replaceSubscriptionConfigs(sub.id, fetched.configs)
-                _events.emit(UiEvent.Message("${fetched.configs.size} ${_state.value.strings.addedConfigs}"))
+                applyFetchResult(sub, fetched, silent = false, selectFirst = true)
             }.onFailure {
                 _events.emit(UiEvent.Message(_state.value.strings.fetchFailed))
             }
         }
     }
 
-    fun refreshSubscription(sub: Subscription) {
+    fun refreshSubscription(sub: Subscription, silent: Boolean = false) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
             val result = SubscriptionFetcher.fetch(sub.url, sub.id)
             _state.value = _state.value.copy(busy = false)
             result.onSuccess { fetched ->
-                store.upsertSubscription(sub.copy(info = fetched.info, lastUpdatedAt = System.currentTimeMillis()))
-                store.replaceSubscriptionConfigs(sub.id, fetched.configs)
-                _events.emit(UiEvent.Message("${fetched.configs.size} ${_state.value.strings.addedConfigs}"))
+                applyFetchResult(sub, fetched, silent = silent, selectFirst = !silent)
             }.onFailure {
-                _events.emit(UiEvent.Message(_state.value.strings.fetchFailed))
+                if (!silent) _events.emit(UiEvent.Message(_state.value.strings.fetchFailed))
             }
         }
+    }
+
+    /**
+     * Shared handling of a subscription fetch, for first add and refresh.
+     * Two guarantees the old code lacked:
+     *  - an empty fetch NEVER wipes the servers already stored (a panel can
+     *    return an empty body with a valid usage header — e.g. an expired
+     *    subscription — and the old code deleted everything silently);
+     *  - the selection survives: the previously selected server of this
+     *    subscription is re-selected when it is still in the fresh list,
+     *    otherwise the first fresh server becomes active.
+     */
+    private suspend fun applyFetchResult(
+        sub: Subscription,
+        fetched: SubscriptionFetcher.FetchResult,
+        silent: Boolean,
+        selectFirst: Boolean
+    ) {
+        val s = _state.value.strings
+        val previousSelected = _state.value.selectedConfig
+        if (fetched.configs.isEmpty()) {
+            // Keep the old servers AND the usage info; only warn the user.
+            store.upsertSubscription(
+                sub.copy(info = fetched.info, lastUpdatedAt = System.currentTimeMillis())
+            )
+            if (!silent) {
+                val base = if (fetched.rawLines > 0) "${fetched.rawLines} ${s.subscriptionUnparseable}"
+                else s.subscriptionNoConfigs
+                val msg = if (fetched.info?.daysLeft == 0L) "$base ${s.expiredNotice}" else base
+                _events.emit(UiEvent.Message(msg))
+            }
+            return
+        }
+        store.upsertSubscription(
+            sub.copy(info = fetched.info, lastUpdatedAt = System.currentTimeMillis())
+        )
+        store.replaceSubscriptionConfigs(sub.id, fetched.configs)
+        val target = matchConfig(
+            previousSelected?.takeIf { it.subscriptionId == sub.id },
+            fetched.configs
+        ) ?: if (selectFirst) fetched.configs.firstOrNull() else null
+        target?.let { store.updateSettings { it.copy(selectedConfigId = it.id) } }
+        if (!silent) _events.emit(UiEvent.Message("${fetched.configs.size} ${s.addedConfigs}"))
     }
 
     fun deleteSubscription(sub: Subscription) {
@@ -339,10 +442,20 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     /** Settings > Reset: new identity + wipe all data. */
     fun resetAll() {
         viewModelScope.launch {
+            // Capture the message BEFORE wiping: resetting the state also
+            // resets the language to English, so reading it afterwards
+            // would show the wrong language.
+            val done = _state.value.strings.resetDone
+            val ctx = getApplication<Application>()
+            ctx.stopService(VboxVpnService.stopIntent(ctx))
             withContext(Dispatchers.IO) { deviceIdentity.reset() }
             store.clearAll()
             _state.value = UiState()
-            _events.emit(UiEvent.Message(Strings.en.resetDone))
+            _events.emit(UiEvent.Message(done))
         }
+    }
+
+    companion object {
+        private const val DAY_MS = 24L * 60 * 60 * 1000
     }
 }

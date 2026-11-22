@@ -17,10 +17,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -65,6 +67,7 @@ import com.amin.vbox.data.ConnectionState
 import com.amin.vbox.data.Subscription
 import com.amin.vbox.ui.AddConfigMenu
 import com.amin.vbox.ui.AppearanceScreen
+import com.amin.vbox.ui.BottomClearanceDp
 import com.amin.vbox.ui.ConfigsScreen
 import com.amin.vbox.ui.CoreStatusScreen
 import com.amin.vbox.ui.DarkPill
@@ -104,6 +107,13 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* best-effort; VPN works without it */ }
+
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startQrScan()
+        else vm.showMessage(vm.state.value.strings.cameraPermissionNeeded)
+    }
 
     private val serviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -154,7 +164,7 @@ class MainActivity : ComponentActivity() {
             else -> null
         } ?: return
         if (ConfigParser.extractLinks(text).isNotEmpty()) {
-            vm.addLink(ConfigParser.extractLinks(text).first())
+            vm.addLinks(text)
         }
     }
 
@@ -162,20 +172,27 @@ class MainActivity : ComponentActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null && result.contents != null) {
-            val links = ConfigParser.extractLinks(result.contents)
-            if (links.isNotEmpty()) vm.addLink(links.first())
+            vm.addLinks(result.contents)
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
 
     fun startQrScan() {
-        IntentIntegrator(this).apply {
-            setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-            setPrompt("Scan a proxy QR code")
-            setBeepEnabled(false)
-            setBarcodeImageEnabled(false)
-        }.initiateScan()
+        // The QR scanner needs the runtime CAMERA permission; without it the
+        // scanner activity used to open on a black preview. Ask first.
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            IntentIntegrator(this).apply {
+                setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                setPrompt("Scan a proxy QR code")
+                setBeepEnabled(false)
+                setBarcodeImageEnabled(false)
+            }.initiateScan()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 }
 
@@ -265,69 +282,85 @@ private fun MainActivity.VboxRoot(vm: VpnViewModel) {
                     composable("core") { CoreStatusScreen(state) { navController.popBackStack() } }
                 }
 
-                // ---- floating power button (bottom-left, overlapping nav) ----
-                val connected = state.connection == ConnectionState.CONNECTED
-                val connecting = state.connection == ConnectionState.CONNECTING
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .offset(x = 16.dp, y = (-108).dp)
-                        .size(84.dp)
-                        .shadow(if (connected) 24.dp else 8.dp, CircleShape, spotColor = VboxColors.Green)
-                        .clip(CircleShape)
-                        .background(if (connected) VboxColors.Green else Color(0xFF2C2C2E))
-                        .clickable { vm.onPowerPressed() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (connecting) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(40.dp), strokeWidth = 4.dp)
-                    } else {
-                        Icon(
-                            Icons.Filled.PowerSettingsNew, null,
-                            tint = Color.White, modifier = Modifier.size(44.dp)
-                        )
-                    }
-                }
-                // ---- Ping pill under the power button ----
-                DarkPill(
-                    label = s.ping,
-                    icon = Icons.Filled.ShowChart,
-                    onClick = { vm.pingSelected() },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .offset(x = 16.dp, y = (-16).dp)
-                )
-
-                // ---- bottom pill nav (centred) ----
-                Box(
+                // ---- bottom overlay: one Column, no absolute offsets ----
+                // Power row (power button + ping pill) above a capped,
+                // weight-based nav bar. Nothing here can overlap anything
+                // else, whatever the font/display scale is. The old layout
+                // used fixed offsets: on narrower screens the ping pill hid
+                // behind the nav bar (it looked like a cut-off 4th tab) and
+                // the power button could touch the bar when text scaled up.
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp)
-                        .shadow(8.dp, RoundedCornerShape(40.dp))
-                        .clip(RoundedCornerShape(40.dp))
-                        .background(VboxColors.Card)
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NavPill(
-                            label = s.home, icon = Icons.Filled.Home,
-                            selected = route == "home",
-                            onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true } } }
+                    val connected = state.connection == ConnectionState.CONNECTED
+                    val connecting = state.connection == ConnectionState.CONNECTING
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(84.dp)
+                                .shadow(if (connected) 24.dp else 8.dp, CircleShape, spotColor = VboxColors.Green)
+                                .clip(CircleShape)
+                                .background(if (connected) VboxColors.Green else Color(0xFF2C2C2E))
+                                .clickable { vm.onPowerPressed() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (connecting) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(40.dp), strokeWidth = 4.dp)
+                            } else {
+                                Icon(
+                                    Icons.Filled.PowerSettingsNew, null,
+                                    tint = Color.White, modifier = Modifier.size(44.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        DarkPill(
+                            label = s.ping,
+                            icon = Icons.Filled.ShowChart,
+                            onClick = { vm.pingSelected() }
                         )
-                        NavPill(
-                            label = s.configs, icon = Icons.Filled.List,
-                            selected = route == "configs" || route.startsWith("servers/"),
-                            onClick = { navController.navigate("configs") { popUpTo("home") } }
-                        )
-                        NavPill(
-                            label = s.settings, icon = Icons.Filled.Settings,
-                            selected = route == "settings" || route in listOf("appearance", "tunnel", "dns", "routing", "core"),
-                            onClick = { navController.navigate("settings") { popUpTo("home") } }
-                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .shadow(8.dp, RoundedCornerShape(40.dp))
+                            .clip(RoundedCornerShape(40.dp))
+                            .background(VboxColors.Card)
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            NavPill(
+                                label = s.home, icon = Icons.Filled.Home,
+                                selected = route == "home",
+                                onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true } } },
+                                modifier = Modifier.weight(1f)
+                            )
+                            NavPill(
+                                label = s.configs, icon = Icons.Filled.List,
+                                selected = route == "configs" || route.startsWith("servers/"),
+                                onClick = { navController.navigate("configs") { popUpTo("home") } },
+                                modifier = Modifier.weight(1f)
+                            )
+                            NavPill(
+                                label = s.settings, icon = Icons.Filled.Settings,
+                                selected = route == "settings" || route in listOf("appearance", "tunnel", "dns", "routing", "core"),
+                                onClick = { navController.navigate("settings") { popUpTo("home") } },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
 
-                SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
+                SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = BottomClearanceDp.dp))
             }
         }
     }
@@ -367,16 +400,24 @@ private fun MainActivity.VboxRoot(vm: VpnViewModel) {
 }
 
 @Composable
-private fun NavPill(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun NavPill(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Weight-distributed (not fixed padding), so the three tabs always fit
+    // the screen width, in either language and at any font scale.
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(32.dp))
             .background(if (selected) Color(0xFF000000) else Color.Transparent)
             .clickable { onClick() }
-            .padding(horizontal = 22.dp, vertical = 10.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, null, tint = if (selected) VboxColors.Accent else Color.White, modifier = Modifier.size(28.dp))
-        Text(label, color = if (selected) VboxColors.Accent else Color.White, fontSize = 14.sp)
+        Icon(icon, null, tint = if (selected) VboxColors.Accent else Color.White, modifier = Modifier.size(24.dp))
+        Text(label, color = if (selected) VboxColors.Accent else Color.White, fontSize = 12.sp, maxLines = 1)
     }
 }
